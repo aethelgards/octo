@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"io"
+	"strings"
 
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
@@ -115,16 +116,36 @@ func (m *OctoModel) readStream(stream *schema.StreamReader[*schema.Message]) tea
 }
 
 func (m *OctoModel) View() tea.View {
-	view := logo
-	view += "\nModel " + m.config.LLMConfig.Model + "\n"
-	if m.response != "" {
-		view += m.response + "\n\n"
+	var sb strings.Builder
+	sb.WriteString(logo)
+	sb.WriteString("\nModel ")
+	sb.WriteString(m.config.LLMConfig.Model)
+	sb.WriteString("\n\n")
+
+	for _, msg := range m.history {
+		switch msg.Role {
+		case schema.User:
+			sb.WriteString("You: ")
+			sb.WriteString(msg.Content)
+			sb.WriteString("\n\n")
+		case schema.Assistant:
+			sb.WriteString("Assistant: ")
+			sb.WriteString(msg.Content)
+			sb.WriteString("\n\n")
+		}
 	}
 
-	view += "> " + m.input.View() + "\n"
-	view += "(Ctrl+C 退出)\n"
+	if m.response != "" && m.stream != nil {
+		sb.WriteString("Assistant: ")
+		sb.WriteString(m.response)
+		sb.WriteString("\n\n")
+	}
 
-	return tea.NewView(view)
+	sb.WriteString(m.input.View())
+	sb.WriteString("\n")
+	sb.WriteString("(Ctrl+C 退出)\n")
+
+	return tea.NewView(sb.String())
 }
 
 func (m *OctoModel) clear() {

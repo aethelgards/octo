@@ -1,10 +1,17 @@
 package structs
 
+type ThinkingConfig struct {
+	Enabled         bool   `yaml:"enabled"`
+	ReasoningEffort string `yaml:"reasoning_effort"` // "low" | "medium" | "high"
+	Show            bool   `yaml:"show"`
+}
+
 type LLMConfig struct {
-	Model   string `yaml:"model"`
-	BaseURL string `yaml:"base_url"`
-	APIKey  string `yaml:"api_key"`
-	Timeout int    `yaml:"timeout"` // timeout, second
+	Model    string         `yaml:"model"`
+	BaseURL  string         `yaml:"base_url"`
+	APIKey   string         `yaml:"api_key"`
+	Timeout  int            `yaml:"timeout"` // timeout, second
+	Thinking ThinkingConfig `yaml:"thinking"`
 }
 
 type OctoConfig struct {

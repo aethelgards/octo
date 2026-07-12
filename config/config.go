@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/aethelgards/octo/structs"
 	"github.com/pkg/errors"
@@ -13,6 +14,14 @@ import (
 var configPath = ".octo/config.yaml"
 
 var OctoConfig *structs.OctoConfig
+
+type ReasoningEffortLevel string
+
+const (
+	ReasoningEffortLevelLow    ReasoningEffortLevel = "low"
+	ReasoningEffortLevelMedium ReasoningEffortLevel = "medium"
+	ReasoningEffortLevelHigh   ReasoningEffortLevel = "high"
+)
 
 func LoadConfig(_ context.Context) error {
 	getwd, err := os.Getwd()
@@ -48,6 +57,15 @@ func validateConfig(cfg *structs.OctoConfig) error {
 	}
 	if cfg.LLMConfig.Timeout <= 0 {
 		return errors.New("llm timeout must be positive")
+	}
+	if cfg.LLMConfig.Thinking.Enabled {
+		if cfg.LLMConfig.Thinking.ReasoningEffort == "" {
+			return errors.New("llm reasoning_effort is required")
+		}
+		level := ReasoningEffortLevel(strings.ToLower(cfg.LLMConfig.Thinking.ReasoningEffort))
+		if level != ReasoningEffortLevelLow && level != ReasoningEffortLevelMedium && level != ReasoningEffortLevelHigh {
+			return errors.New("llm reasoning_effort must be low | medium | high")
+		}
 	}
 
 	if cfg.LogConfig.Level < 1 || cfg.LogConfig.Level > 4 {

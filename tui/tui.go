@@ -15,6 +15,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/aethelgards/octo/llm"
 	"github.com/aethelgards/octo/structs"
+	"github.com/cloudwego/eino/adk"
 	"github.com/cloudwego/eino/schema"
 )
 
@@ -56,6 +57,10 @@ type streamMsg struct {
 	stream           *schema.StreamReader[*schema.Message]
 }
 
+type agentIterMsg struct {
+	iter *adk.AsyncIterator[*adk.AgentEvent]
+}
+
 type OctoModel struct {
 	ctx              context.Context
 	config           *structs.OctoConfig
@@ -65,6 +70,7 @@ type OctoModel struct {
 	response         string
 	reasoning        string
 	stream           *schema.StreamReader[*schema.Message]
+	agentIter        *adk.AsyncIterator[*adk.AgentEvent]
 	viewport         viewport.Model
 	renderer         *glamour.TermRenderer
 	spinner          spinner.Model
@@ -177,6 +183,10 @@ func (m *OctoModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.viewport.SetContent(m.buildContent())
 		m.viewport.GotoBottom()
 		return m, m.readStream(m.stream)
+
+	case agentIterMsg:
+		m.agentIter = msg.iter
+		return m, m.readAgentEvent(m.agentIter)
 	}
 
 	var cmds []tea.Cmd
@@ -192,11 +202,11 @@ func (m *OctoModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m *OctoModel) startStream() tea.Cmd {
 	return func() tea.Msg {
-		stream, err := llm.ChatStream(m.ctx, m.history)
-		if err != nil {
-			return streamMsg{err: err}
+		if len(m.history) == 0 {
+			return streamMsg{isDone: true}
 		}
-		return streamMsg{stream: stream}
+		iter := llm.AgentQuery(m.ctx, m.history)
+		return agentIterMsg{iter: iter}
 	}
 }
 
@@ -217,6 +227,38 @@ func (m *OctoModel) readStream(stream *schema.StreamReader[*schema.Message]) tea
 		return streamMsg{
 			content:          msg.Content,
 			reasoningContent: msg.ReasoningContent,
+		}
+	}
+}
+
+func (m *OctoModel) readAgentEvent(iter *adk.AsyncIterator[*adk.AgentEvent]) tea.Cmd {
+	return func() tea.Msg {
+		if iter == nil {
+			return streamMsg{isDone: true}
+		}
+
+		for {
+			event, ok := iter.Next()
+			if !ok {
+				return streamMsg{isDone: true}
+			}
+
+			if event.Err != nil {
+				return streamMsg{err: event.Err}
+			}
+
+			if event.Output != nil && event.Output.MessageOutput != nil {
+				mv := event.Output.MessageOutput
+				if mv.IsStreaming && mv.MessageStream != nil {
+					return streamMsg{stream: mv.MessageStream}
+				}
+				if mv.Message != nil {
+					return streamMsg{
+						content:          mv.Message.Content,
+						reasoningContent: mv.Message.ReasoningContent,
+					}
+				}
+			}
 		}
 	}
 }
@@ -263,7 +305,6 @@ func (m *OctoModel) View() tea.View {
 	sb.WriteString(m.help.View(keys))
 
 	v := tea.NewView(sb.String())
-	v.MouseMode = tea.MouseModeCellMotion
 	return v
 }
 

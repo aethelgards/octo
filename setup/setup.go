@@ -27,6 +27,9 @@ func initInner(ctx context.Context) error {
 	if err := llm.InitModel(ctx, config.OctoConfig.LLMConfig); err != nil {
 		return err
 	}
+	if err := llm.InitAgent(ctx); err != nil {
+		return err
+	}
 	if err := tui.Init(ctx, config.OctoConfig); err != nil {
 		return err
 	}
